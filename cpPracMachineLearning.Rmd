@@ -1,0 +1,162 @@
+# Practical Machine Learning - Course Project
+### *By Ivo Alabe*
+
+## 1. Goal
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+The goal of this project is to predict the manner in which people did the exercise. We will create a report describing how we built our model, how we used cross validation, what we think the expected out of sample error is, and why we made the choices you did. We will also use our prediction model to predict 20 different test cases.
+
+The, in this project we will predict the manner of performing unilateral dumbbell biceps curls based on data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. The 5 possible methods include -
+
+    A: exactly according to the specification
+    B: throwing the elbows to the front
+    C: lifting the dumbbell only halfway
+    D: lowering the dumbbell only halfway
+    E: throwing the hips to the front
+
+## 2. Data Loading and Cleaning
+
+Loading required libraries:
+
+`````{r}
+#
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+library(corrplot)
+library(gbm)
+````
+We have already downloaded the data. The data is in our working directory.
+
+````{r}
+train_in <- read.csv(file = "pml-training.csv", header=T)
+valid_in <- read.csv(file="pml-testing.csv", header=T)
+dim(train_in)
+dim(valid_in)
+````
+Now, we clean the data.  We are cleaning missing values, variables which have little impact on *classe* and values with near zero variance (NZV).
+
+````{r}
+trainData<- train_in[, colSums(is.na(train_in)) == 0]
+validData <- valid_in[, colSums(is.na(valid_in)) == 0]
+
+trainData <- trainData[, -c(1:7)]
+validData <- validData[, -c(1:7)]
+
+set.seed(1234) 
+inTrain <- createDataPartition(trainData$classe, p = 0.7, list = FALSE)
+trainData <- trainData[inTrain, ]
+testData <- trainData[-inTrain, ]
+
+NZV <- nearZeroVar(trainData)
+trainData <- trainData[, -NZV]
+testData  <- testData[, -NZV]
+
+
+dim(trainData)
+dim(testData)
+
+````
+## 3. Data Exploration.
+
+To know the relation of variables, we use correlation. The correlated predictors are those with a dark color intersection.
+
+````{r}
+cor_mat <- cor(trainData[, -53])
+corrplot(cor_mat, order = "FPC", method = "color", type = "lower",tl.cex = 0.8, tl.col = rgb(0, 0, 0))
+````
+
+To obtain the names of the variables, we do the following:
+
+````{r}
+highlyCorrelated = findCorrelation(cor_mat, cutoff=0.75)
+
+names(trainData)[highlyCorrelated]
+````
+
+## 4. Model Building
+
+For this project, we will use classification trees, random forest and GBM (generalized boosted models).
+
+## 4.1 Classification Tree.
+
+We obtain the model and then plot the classification tree.
+
+````{r}
+set.seed(12345)
+decisionTreeMod1 <- rpart(classe ~ ., data=trainData, method="class")
+fancyRpartPlot(decisionTreeMod1)
+
+````
+
+Then, we validate the model on the "test data" to see how well it performs. We can see the accuracy in the *Overall Statistics* section:
+
+````{r}
+predictTreeMod1 <- predict(decisionTreeMod1, testData, type = "class")
+cmtree <- confusionMatrix(predictTreeMod1, factor(testData$classe))
+cmtree
+````
+
+## 4.2 Random Forest
+
+First, we build the model:
+
+`````{r}
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+modRF1 <- train(classe ~ ., data=trainData, method="rf", trControl=controlRF)
+modRF1$finalModel
+````
+
+Then, we validate the data on the "test data" to see how well it performs. We can see the accuracy in the *Overall Statistics* section: 
+
+````{r}
+predictRF1 <- predict(modRF1, newdata=testData)
+cmrf <- confusionMatrix(predictRF1, factor(testData$classe))
+cmrf
+````
+
+## 4.3 GBM
+
+First, we build the model:
+
+````{r}
+set.seed(12345)
+controlGBM <- trainControl(method = "repeatedcv", number = 5, repeats = 1)
+modGBM  <- train(classe ~ ., data=trainData, method = "gbm", trControl = controlGBM, verbose = FALSE)
+modGBM$finalModel
+
+print(modGBM)
+
+````
+
+Then, we validate the data on the "test data" to see how well it performs. We can see the accuracy in the *Overall Statistics* section: 
+
+
+````{r}
+predictGBM <- predict(modGBM, newdata=testData)
+cmGBM <- confusionMatrix(predictGBM, factor(testData$classe))
+cmGBM
+````
+As we can see, Random Forest has the highest Accuracy Rate.
+
+## 4. Prediction
+
+Finally, we use Random Forest to make the prediction.  
+
+````{r}
+Results <- predict(modRF1, newdata=validData)
+Results
+````
+
+Don't forget the meaning:
+    A: exactly according to the specification
+    B: throwing the elbows to the front
+    C: lifting the dumbbell only halfway
+    D: lowering the dumbbell only halfway
+    E: throwing the hips to the front
+
+Thank you!
